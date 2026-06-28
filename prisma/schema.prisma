@@ -1,0 +1,14 @@
+// Voyger — Prisma schema
+// Docs: https://pris.ly/d/prisma-schema
+//
+// Business models (User, Product, Order, ...) will be added later.
+// At this stage the schema only declares the datasource so that the
+// Prisma Client can be generated for the project foundation.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
