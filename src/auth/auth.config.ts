@@ -48,11 +48,9 @@ export function createAuth(prisma: PrismaClient) {
     // Telling Better Auth its basePath lets it build correct internal URLs.
     basePath: '/api/v1/auth',
 
-    // Email & password based authentication.
-    emailAndPassword: {
-      enabled: true,
-      autoSignIn: true,
-    },
+    // ── OAuth-only ──────────────────────────────────────────────────────
+    // Email/password authentication has been removed.
+    // Users authenticate exclusively via Google or Facebook OAuth.
 
     // Inject the custom `requiresDeviceManagement` flag into the user object
     // so Better Auth includes it in every session response to the frontend.
