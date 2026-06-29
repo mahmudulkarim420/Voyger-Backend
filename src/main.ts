@@ -2,13 +2,20 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import helmet from 'helmet';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule);
 
+  // Apply Helmet globally for secure HTTP headers (must be before CORS)
+  app.use(helmet());
+
   // Enable CORS
-  app.enableCors();
+  app.enableCors({
+    origin: 'http://localhost:3000', // আপনার ফ্রন্টএন্ডের ইউআরএল
+    credentials: true, // কুকি সেট হওয়ার জন্য এটি মাস্ট true হতে হবে!
+  });
 
   // Enable graceful shutdown
   app.enableShutdownHooks();

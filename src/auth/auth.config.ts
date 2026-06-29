@@ -12,8 +12,7 @@ import type { PrismaClient } from '@prisma/client';
  */
 export function createAuth(prisma: PrismaClient) {
   // Base URL of the backend (scheme + host + port only — NO path).
-  const baseUrl =
-    process.env['BETTER_AUTH_URL'] ?? 'http://localhost:5000';
+  const baseUrl = process.env['BETTER_AUTH_URL'] ?? 'http://localhost:5000';
 
   // Parse the comma-separated TRUSTED_ORIGINS env var into a clean list.
   // Always include the backend's own base URL so same-origin requests pass
@@ -55,10 +54,95 @@ export function createAuth(prisma: PrismaClient) {
       autoSignIn: true,
     },
 
+    // Inject the custom `requiresDeviceManagement` flag into the user object
+    // so Better Auth includes it in every session response to the frontend.
+    user: {
+      additionalFields: {
+        requiresDeviceManagement: {
+          type: 'boolean',
+          required: false,
+          defaultValue: false,
+        },
+      },
+    },
+
     // Advanced session configuration.
     session: {
       expiresIn: 60 * 60 * 24 * 7, // 7 days
       updateAge: 60 * 60 * 24, // Refresh session once per day
+    },
+
+    // Database lifecycle hooks.
+    //
+    // `session.create.before` — Soft device-limit enforcement.
+    //   When a user already has MAX_SESSIONS active sessions, we do NOT
+    //   delete the oldest one. Instead we ALLOW the new session to be
+    //   created and atomically flag the user with
+    //   `requiresDeviceManagement: true`. The frontend middleware reads
+    //   this flag and redirects the user to the /device-limit page where
+    //   they can choose which device to keep.
+    //
+    // `session.delete.after` — Auto-unflag.
+    //   After a session is revoked (either by the user on /device-limit
+    //   or by expiry cleanup), we recount active sessions. If the user
+    //   is back within limits we clear the flag so they can navigate
+    //   freely again.
+    databaseHooks: {
+      session: {
+        create: {
+          before: async (session) => {
+            const MAX_SESSIONS = 2;
+            const userId = session.userId as string;
+
+            // Count existing active (non-expired) sessions.
+            const activeCount = await prisma.session.count({
+              where: {
+                userId,
+                expiresAt: { gt: new Date() },
+              },
+            });
+
+            // If the user already has MAX_SESSIONS or more, flag them
+            // for device management but DO NOT delete any sessions.
+            // The $transaction guarantees the flag update is atomic.
+            if (activeCount >= MAX_SESSIONS) {
+              await prisma.$transaction([
+                prisma.user.update({
+                  where: { id: userId },
+                  data: { requiresDeviceManagement: true },
+                }),
+              ]);
+            }
+
+            // Return nothing — Better Auth proceeds to create the new session.
+          },
+        },
+        delete: {
+          after: async (session) => {
+            if (!session) return;
+            const MAX_SESSIONS = 2;
+            const userId = session.userId as string;
+
+            // Recount remaining active sessions after one was revoked.
+            const activeCount = await prisma.session.count({
+              where: {
+                userId,
+                expiresAt: { gt: new Date() },
+              },
+            });
+
+            // If the user is back within limits, clear the flag.
+            if (activeCount <= MAX_SESSIONS) {
+              await prisma.$transaction([
+                prisma.user.update({
+                  where: { id: userId },
+                  data: { requiresDeviceManagement: false },
+                }),
+              ]);
+            }
+          },
+        },
+      },
     },
 
     // Trusted application origins for CSRF protection. Better Auth rejects
@@ -83,9 +167,27 @@ export function createAuth(prisma: PrismaClient) {
             facebook: {
               clientId: facebookClientId,
               clientSecret: facebookClientSecret,
+              mapProfileToUser: (profile: any) => {
+                const email =
+                  profile.email || `${profile.id}@facebook-user.local`;
+                const emailVerified = !!profile.email;
+                const image =
+                  profile.picture?.data?.url || profile.picture || null;
+
+                return {
+                  name: profile.name || 'Facebook User',
+                  email,
+                  emailVerified,
+                  image,
+                };
+              },
             },
           }
         : {}),
+    },
+
+    accountLinking: {
+      enabled: true,
     },
   });
 }
