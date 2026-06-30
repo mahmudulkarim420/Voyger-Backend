@@ -148,6 +148,25 @@ export function createAuth(prisma: PrismaClient) {
     // header is not in this list, so every client origin must be included.
     trustedOrigins,
 
+    // ── Cross-domain cookie configuration ────────────────────────────────
+    // In this decoupled architecture the Next.js frontend (Vercel) and the
+    // NestJS backend (Render) live on completely different root domains, so
+    // every auth request is cross-site. Better Auth's default `SameSite=Lax`
+    // cookies are NOT stored by the browser when set via a cross-site fetch
+    // response, which causes the OAuth `state` cookie to go missing and
+    // triggers a `state_mismatch` error after the Google callback.
+    //
+    // Setting `SameSite=None; Secure` in production lets the browser persist
+    // the state (and session) cookies across origins. In development we keep
+    // `SameSite=Lax` + `Secure=false` so cookies still work over plain HTTP
+    // on localhost.
+    advanced: {
+      defaultCookieAttributes: {
+        sameSite: process.env['NODE_ENV'] === 'production' ? 'none' : 'lax',
+        secure: process.env['NODE_ENV'] === 'production',
+      },
+    },
+
     // Social login providers. Each provider is conditionally enabled only
     // when both its client ID and secret are present in the environment,
     // preventing runtime errors when a provider isn't configured.
