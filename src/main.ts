@@ -10,10 +10,7 @@ async function bootstrap() {
 
   const configService = app.get(ConfigService);
 
-  // Apply Helmet globally for secure HTTP headers (must be before CORS).
-  // Override crossOriginResourcePolicy to "cross-origin" so it does NOT
-  // conflict with the CORS allowlist — helmet's default "same-origin"
-  // blocks cross-origin requests between Vercel (frontend) and Render (backend).
+
   app.use(
     helmet({
       crossOriginResourcePolicy: { policy: 'cross-origin' },
