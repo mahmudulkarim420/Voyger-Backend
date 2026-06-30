@@ -17,7 +17,13 @@ export class PrismaService
   private readonly logger = new Logger(PrismaService.name);
 
   constructor() {
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    const pool = new Pool({ 
+      connectionString: process.env.DATABASE_URL,
+      // Neon DB বা ক্লাউড ডেটাবেসের সিকিউর কানেকশনের জন্য SSL এনাবল করা হয়েছে
+      ssl: process.env.DATABASE_URL?.includes('sslmode=require') ? true : undefined,
+      // সেশন রিলিজ করার পর যাতে কানেকশন হ্যাং হয়ে না থাকে
+      allowExitOnIdle: true, 
+    });
     const adapter = new PrismaPg(pool);
     super({ adapter });
   }
